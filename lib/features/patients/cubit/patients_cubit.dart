@@ -1,79 +1,85 @@
 import 'dart:async';
-import 'package:clinic_app/data/database/tables/patients_table.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'patients_state.dart';
 import '../../../data/database/database.dart';
+import '../../../data/database/tables/patients_table.dart';
 import '../../../data/repositories/patients_repository.dart';
-
-class PatientsState {
-  final List<Patient> patients;
-  final bool isLoading;
-  final String? errorMessage;
-
-  const PatientsState({
-    this.patients = const [],
-    this.isLoading = false,
-    this.errorMessage,
-  });
-
-  PatientsState copyWith({
-    List<Patient>? patients,
-    bool? isLoading,
-    String? errorMessage,
-  }) {
-    return PatientsState(
-      patients: patients ?? this.patients,
-      isLoading: isLoading ?? this.isLoading,
-      errorMessage: errorMessage,
-    );
-  }
-}
 
 class PatientsCubit extends Cubit<PatientsState> {
   final PatientsRepository repository;
-  StreamSubscription<List<Patient>>? _subscription;
+  StreamSubscription<List<Patient>>? _sub;
 
-  PatientsCubit(this.repository) : super(const PatientsState()) {
-    _listenToPatients();
+  PatientsCubit(this.repository) : super(PatientsInitial()) {
+    _listen('');
   }
 
-  void _listenToPatients() {
-    emit(state.copyWith(isLoading: true));
-    _subscription = repository.watchAllPatients().listen(
-      (patients) {
-        emit(state.copyWith(patients: patients, isLoading: false));
+  void search(String keyword) {
+    _sub?.cancel();
+    _listen(keyword);
+  }
+
+  void _listen(String keyword) {
+    emit(PatientsLoading());
+    final stream = keyword.trim().isEmpty
+        ? repository.watchAllPatients()
+        : repository.searchPatients(keyword);
+
+    _sub = stream.listen(
+      (list) {
+        if (!isClosed) emit(PatientsLoaded(list));
       },
-      onError: (error) {
-        emit(
-          state.copyWith(
-            isLoading: false,
-            errorMessage: 'حدث خطأ أثناء تحميل المرضى: $error',
-          ),
-        );
+      onError: (e) {
+        if (!isClosed) emit(PatientsError(e.toString()));
       },
     );
   }
 
-  Future<void> addPatient({
+  Future<String?> addPatient({
     required String fullName,
     required Gender gender,
     required String phone,
+    DateTime? birthDate,
+    int? manualAge,
+    String? address,
+    String? notes,
   }) async {
     try {
       await repository.addPatient(
         fullName: fullName,
         gender: gender,
         phone: phone,
+        birthDate: birthDate,
+        manualAge: manualAge,
+        address: address,
+        notes: notes,
       );
-      // لا حاجة لإعادة تحميل القائمة يدوياً
-      // الـ Stream من Drift سينعكس تلقائياً فوراً
-    } catch (error) {
-      emit(state.copyWith(errorMessage: 'فشل حفظ المريض: $error'));
+      return null; // نجاح
+    } catch (e) {
+      return 'فشل الحفظ: $e';
+    }
+  }
+
+  Future<String?> updatePatient(Patient patient) async {
+    try {
+      await repository.updatePatient(patient);
+      return null;
+    } catch (e) {
+      return 'فشل التعديل: $e';
+    }
+  }
+
+  Future<String?> archivePatient(int id) async {
+    try {
+      await repository.archivePatient(id);
+      return null;
+    } catch (e) {
+      return 'فشل الأرشفة: $e';
     }
   }
 
   @override
   Future<void> close() {
-    _subscription?.cancel();
+    _sub?.cancel();
     return super.close();
   }
 }
