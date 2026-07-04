@@ -4,6 +4,9 @@ import '../../data/database/database.dart';
 import '../../data/repositories/patients_repository.dart';
 import '../../data/repositories/users_repository.dart';
 import '../../data/repositories/waiting_list_repository.dart';
+import '../../data/repositories/visits_repository.dart';
+import '../../data/repositories/appointments_repository.dart';
+import '../../data/repositories/settings_repository.dart';
 import '../services/session_service.dart';
 import '../../features/auth/cubit/auth_cubit.dart';
 
@@ -26,6 +29,15 @@ void setupDependencies() {
   );
   getIt.registerSingleton<WaitingListRepository>(
     WaitingListRepository(getIt<AppDatabase>()),
+  );
+  getIt.registerSingleton<VisitsRepository>(
+    VisitsRepository(getIt<AppDatabase>()),
+  );
+  getIt.registerSingleton<AppointmentsRepository>(
+    AppointmentsRepository(getIt<AppDatabase>()),
+  );
+  getIt.registerSingleton<SettingsRepository>(
+    SettingsRepository(getIt<AppDatabase>()),
   );
 
   getIt.registerSingleton<AuthCubit>(

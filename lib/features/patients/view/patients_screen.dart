@@ -1,5 +1,7 @@
+import 'package:clinic_app/core/router/app_router.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 import '../../../core/di/injector.dart';
 import '../../../data/database/database.dart';
 import '../../../data/database/tables/patients_table.dart';
@@ -388,6 +390,13 @@ class _PatientRow extends StatelessWidget {
             flex: 2,
             child: Row(
               children: [
+                _ActionBtn(
+                  icon: Icons.folder_open_outlined,
+                  color: const Color(0xFF6366F1),
+                  tooltip: 'الملف الطبي',
+                  onTap: () => context.go(AppRoutes.patientFile(patient.id)),
+                ),
+                const SizedBox(width: 6),
                 _ActionBtn(
                   icon: Icons.edit_outlined,
                   color: const Color(0xFF1F3864),

@@ -74,4 +74,12 @@ class UsersRepository {
       UsersCompanion(passwordHash: Value(PasswordHelper.hash(newPassword))),
     );
   }
+
+  Future<bool> verifyPassword(int userId, String password) async {
+    final user = await (db.select(
+      db.users,
+    )..where((u) => u.id.equals(userId))).getSingleOrNull();
+    if (user == null) return false;
+    return PasswordHelper.verify(password, user.passwordHash);
+  }
 }
