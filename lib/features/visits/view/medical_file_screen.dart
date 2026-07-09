@@ -1,15 +1,19 @@
-import 'package:clinic_app/data/repositories/visits_repository.dart';
-import 'package:clinic_app/features/visits/widgets/add_visit_dialog.dart';
+import 'package:clinic_app/core/router/app_router.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../core/di/injector.dart';
 import '../../../data/database/database.dart';
 import '../../../data/database/tables/patients_table.dart';
 import '../../../data/repositories/patients_repository.dart';
+import '../../../data/repositories/visits_repository.dart';
+import '../../../data/repositories/settings_repository.dart';
 import '../../visits/cubit/visits_cubit.dart';
 import '../../visits/cubit/visits_state.dart';
+import '../../visits/widgets/add_visit_dialog.dart';
 import '../../auth/cubit/auth_cubit.dart';
 import '../../auth/cubit/auth_state.dart';
+import '../../../core/services/prescription_service.dart';
+import 'package:go_router/go_router.dart';
 
 class MedicalFileScreen extends StatefulWidget {
   final int patientId;
@@ -21,24 +25,39 @@ class MedicalFileScreen extends StatefulWidget {
 
 class _MedicalFileScreenState extends State<MedicalFileScreen> {
   Patient? _patient;
+  ClinicSetting? _setting;
   bool _loading = true;
+
+  // ← نُنشئ الـ Cubit هنا مباشرة بدل BlocProvider
+  late final VisitsCubit _visitsCubit;
 
   @override
   void initState() {
     super.initState();
-    _loadPatient();
+    // ننشئ الـ Cubit فوراً قبل أي شيء
+    _visitsCubit = VisitsCubit(getIt<VisitsRepository>(), widget.patientId);
+    _loadData();
   }
 
-  Future<void> _loadPatient() async {
+  @override
+  void dispose() {
+    _visitsCubit.close(); // مهم: نغلقه عند الخروج
+    super.dispose();
+  }
+
+  Future<void> _loadData() async {
     try {
       final p = await getIt<PatientsRepository>().getPatientById(
         widget.patientId,
       );
-      if (mounted)
+      final s = await getIt<SettingsRepository>().watchSettings().first;
+      if (mounted) {
         setState(() {
           _patient = p;
+          _setting = s;
           _loading = false;
         });
+      }
     } catch (_) {
       if (mounted) setState(() => _loading = false);
     }
@@ -53,20 +72,23 @@ class _MedicalFileScreenState extends State<MedicalFileScreen> {
       return const Scaffold(body: Center(child: Text('المريض غير موجود')));
     }
 
-    return BlocProvider(
-      create: (_) => VisitsCubit(getIt<VisitsRepository>(), widget.patientId),
-      child: Scaffold(
-        backgroundColor: const Color(0xFFF5F7FA),
-        body: Padding(
-          padding: const EdgeInsets.all(28),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildHeader(context),
-              const SizedBox(height: 24),
-              Expanded(child: _buildVisitsList(context)),
-            ],
-          ),
+    return Scaffold(
+      backgroundColor: const Color(0xFFF5F7FA),
+      body: Padding(
+        padding: const EdgeInsets.all(28),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildHeader(context),
+            const SizedBox(height: 24),
+            // نمرر الـ Cubit مباشرة لـ BlocProvider
+            Expanded(
+              child: BlocProvider.value(
+                value: _visitsCubit,
+                child: _buildVisitsList(context),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -95,6 +117,31 @@ class _MedicalFileScreenState extends State<MedicalFileScreen> {
       ),
       child: Row(
         children: [
+          // ── زر العودة ──
+          Container(
+            margin: const EdgeInsetsDirectional.only(end: 16),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1F3864).withOpacity(0.08),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: IconButton(
+              icon: const Icon(
+                Icons.arrow_forward_ios_rounded, // للـ RTL بيظهر للاليمين
+                color: Color(0xFF1F3864),
+                size: 20,
+              ),
+              tooltip: 'عودة للمرضى',
+              onPressed: () {
+                if (context.canPop()) {
+                  context.pop();
+                } else {
+                  context.go(AppRoutes.patients);
+                }
+              },
+            ),
+          ),
+
+          // ── الأفاتار ──
           CircleAvatar(
             radius: 32,
             backgroundColor: const Color(0xFF1F3864).withOpacity(0.1),
@@ -108,6 +155,8 @@ class _MedicalFileScreenState extends State<MedicalFileScreen> {
             ),
           ),
           const SizedBox(width: 16),
+
+          // ── البيانات ──
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -147,6 +196,8 @@ class _MedicalFileScreenState extends State<MedicalFileScreen> {
               ],
             ),
           ),
+
+          // ── زر إضافة زيارة ──
           FilledButton.icon(
             onPressed: () => _showAddVisit(context),
             icon: const Icon(Icons.add),
@@ -198,7 +249,11 @@ class _MedicalFileScreenState extends State<MedicalFileScreen> {
           return ListView.separated(
             itemCount: state.visits.length,
             separatorBuilder: (_, __) => const SizedBox(height: 12),
-            itemBuilder: (context, i) => _VisitCard(visit: state.visits[i]),
+            itemBuilder: (context, i) => _VisitCard(
+              visit: state.visits[i],
+              patient: _patient!,
+              setting: _setting,
+            ),
           );
         }
         return const SizedBox();
@@ -206,6 +261,7 @@ class _MedicalFileScreenState extends State<MedicalFileScreen> {
     );
   }
 
+  // ← هنا الفرق الجوهري: نمرر _visitsCubit مباشرة
   void _showAddVisit(BuildContext context) {
     final authState = getIt<AuthCubit>().state;
     if (authState is! AuthSuccess) return;
@@ -213,17 +269,16 @@ class _MedicalFileScreenState extends State<MedicalFileScreen> {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (_) => BlocProvider.value(
-        value: context.read<VisitsCubit>(),
-        child: AddVisitDialog(
-          doctorId: authState.user.id,
-          patientName: _patient!.fullName,
-        ),
+      builder: (_) => AddVisitDialog(
+        doctorId: authState.user.id,
+        patientName: _patient!.fullName,
+        visitsCubit: _visitsCubit, // ← مباشرة بدون context.read
       ),
     );
   }
 }
 
+// ── Info Chip ──
 class _InfoChip extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -262,9 +317,17 @@ class _InfoChip extends StatelessWidget {
   }
 }
 
+// ── بطاقة الزيارة ──
 class _VisitCard extends StatelessWidget {
   final Visit visit;
-  const _VisitCard({required this.visit});
+  final Patient patient;
+  final ClinicSetting? setting;
+
+  const _VisitCard({
+    required this.visit,
+    required this.patient,
+    required this.setting,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -307,6 +370,11 @@ class _VisitCard extends StatelessWidget {
             _formatDate(visit.visitDate),
             style: TextStyle(fontSize: 12, color: Colors.grey[500]),
           ),
+          trailing: IconButton(
+            icon: const Icon(Icons.print_outlined, color: Color(0xFF1F3864)),
+            tooltip: 'طباعة الوصفة',
+            onPressed: () => _print(context),
+          ),
           children: [
             const Divider(height: 1),
             const SizedBox(height: 12),
@@ -341,6 +409,25 @@ class _VisitCard extends StatelessWidget {
     );
   }
 
+  Future<void> _print(BuildContext context) async {
+    try {
+      await PrescriptionService.printPrescription(
+        visit: visit,
+        patient: patient,
+        setting: setting ?? ClinicSetting(id: 1, autoBackupEnabled: false),
+      );
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('فشل الطباعة: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   String _formatDate(DateTime date) {
     final months = [
       'يناير',
@@ -360,6 +447,7 @@ class _VisitCard extends StatelessWidget {
   }
 }
 
+// ── قسم نصي ──
 class _Section extends StatelessWidget {
   final String title;
   final String content;

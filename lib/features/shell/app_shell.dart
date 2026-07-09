@@ -112,6 +112,12 @@ class _SideBar extends StatelessWidget {
             isActive: location == AppRoutes.waitingList,
           ),
           _NavItem(
+            icon: Icons.inventory_2_outlined,
+            label: 'الأرشيف',
+            route: AppRoutes.archive,
+            isActive: location == AppRoutes.archive,
+          ),
+          _NavItem(
             icon: Icons.settings_rounded,
             label: 'الإعدادات',
             route: AppRoutes.settings,

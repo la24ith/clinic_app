@@ -7,11 +7,13 @@ import '../cubit/appointments_cubit.dart';
 class AddAppointmentDialog extends StatefulWidget {
   final DateTime initialDate;
   final AppointmentsRepository repository;
+  final AppointmentsCubit? cubit;
 
   const AddAppointmentDialog({
     super.key,
     required this.initialDate,
     required this.repository,
+    this.cubit,
   });
 
   @override
@@ -310,7 +312,10 @@ class _AddAppointmentDialogState extends State<AddAppointmentDialog> {
       _time.minute,
     );
 
-    final error = await context.read<AppointmentsCubit>().addAppointment(
+    final AppointmentsCubit cubit =
+        widget.cubit ?? context.read<AppointmentsCubit>();
+
+    final error = await cubit.addAppointment(
       patientId: _selected!.id,
       dateTime: dateTime,
       reason: _reasonCtrl.text.trim().isEmpty ? null : _reasonCtrl.text.trim(),

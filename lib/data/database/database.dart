@@ -135,6 +135,14 @@ class AppDatabase extends _$AppDatabase {
     return query.watch();
   }
 
+  //للارشييييف
+  Stream<List<Patient>> watchArchivedPatients() {
+    final query = select(patients)
+      ..where((p) => p.isArchived.equals(true))
+      ..orderBy([(p) => OrderingTerm.desc(p.updatedAt)]);
+    return query.watch();
+  }
+
   // حساب الدور التالي لليوم الحالي
   Future<int> getNextDailyOrder() async {
     final today = DateTime.now();

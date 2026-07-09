@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'core/di/injector.dart';
 import 'core/router/app_router.dart';
+import 'core/shortcuts/global_shortcuts_wrapper.dart';
 import 'data/database/database.dart';
 import 'features/auth/cubit/auth_cubit.dart';
 
@@ -10,8 +11,6 @@ void main() async {
 
   final db = getIt<AppDatabase>();
   await db.ensureSettingsRowExists();
-
-  // تحقق من الحالة الأولية قبل بدء التطبيق
   await getIt<AuthCubit>().checkInitialState();
 
   runApp(const MyApp());
@@ -30,8 +29,13 @@ class MyApp extends StatelessWidget {
         colorSchemeSeed: const Color(0xFF1F3864),
         fontFamily: 'Arial',
       ),
-      builder: (context, child) =>
-          Directionality(textDirection: TextDirection.rtl, child: child!),
+      builder: (context, child) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: GlobalShortcutsWrapper(
+          // ← هنا
+          child: child!,
+        ),
+      ),
       routerConfig: appRouter,
     );
   }

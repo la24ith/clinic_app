@@ -1,3 +1,4 @@
+import 'package:clinic_app/features/archive/view/archive_screen.dart';
 import 'package:clinic_app/features/visits/view/medical_file_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -25,11 +26,17 @@ class AppRoutes {
   static const appointments = '/appointments';
   static const waitingList = '/waiting-list';
   static const settings = '/settings';
+  static const archive = '/archive';
+
   static String patientFile(int id) => '/patients/$id';
 }
 
+final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
+
 final appRouter = GoRouter(
   initialLocation: AppRoutes.login,
+  navigatorKey: rootNavigatorKey, // ← هون
+
   redirect: (context, state) async {
     // منطق إعادة التوجيه بناءً على حالة المصادقة
     final authCubit = getIt<AuthCubit>();
@@ -66,6 +73,10 @@ final appRouter = GoRouter(
         final id = int.parse(state.pathParameters['id']!);
         return MedicalFileScreen(patientId: id);
       },
+    ),
+    GoRoute(
+      path: AppRoutes.archive,
+      builder: (context, state) => const ArchiveScreen(),
     ),
 
     // Shell Route - القائمة الجانبية تحتضن كل الشاشات الداخلية

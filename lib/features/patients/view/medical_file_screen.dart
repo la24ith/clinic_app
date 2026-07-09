@@ -227,15 +227,16 @@ class _MedicalFileScreenState extends State<MedicalFileScreen> {
     final authState = getIt<AuthCubit>().state;
     if (authState is! AuthSuccess) return;
 
+    // احصل على الـ Cubit قبل ما تفتح الـ Dialog
+    final visitsCubit = context.read<VisitsCubit>();
+
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (_) => BlocProvider.value(
-        value: context.read<VisitsCubit>(),
-        child: AddVisitDialog(
-          doctorId: authState.user.id,
-          patientName: _patient!.fullName,
-        ),
+      builder: (_) => AddVisitDialog(
+        doctorId: authState.user.id,
+        patientName: _patient!.fullName,
+        visitsCubit: visitsCubit, // ← مرره مباشرة
       ),
     );
   }

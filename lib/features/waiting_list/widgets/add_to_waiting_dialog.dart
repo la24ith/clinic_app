@@ -6,7 +6,8 @@ import '../cubit/waiting_list_cubit.dart';
 
 class AddToWaitingDialog extends StatefulWidget {
   final WaitingListRepository repository;
-  const AddToWaitingDialog({super.key, required this.repository});
+  final WaitingListCubit? cubit;
+  const AddToWaitingDialog({super.key, required this.repository, this.cubit});
 
   @override
   State<AddToWaitingDialog> createState() => _AddToWaitingDialogState();
@@ -240,9 +241,11 @@ class _AddToWaitingDialogState extends State<AddToWaitingDialog> {
     if (_selected == null) return;
     setState(() => _isSaving = true);
 
-    final error = await context.read<WaitingListCubit>().addPatientToWaiting(
-      _selected!.id,
-    );
+    // استخدم الـ cubit الممرر إذا موجود، وإلا context.read
+    final WaitingListCubit cubit =
+        widget.cubit ?? context.read<WaitingListCubit>();
+
+    final error = await cubit.addPatientToWaiting(_selected!.id);
 
     if (!mounted) return;
     setState(() => _isSaving = false);
@@ -254,6 +257,8 @@ class _AddToWaitingDialogState extends State<AddToWaitingDialog> {
           error ?? 'تمت إضافة ${_selected!.fullName} لقائمة الانتظار',
         ),
         backgroundColor: error != null ? Colors.red : Colors.green,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
     );
   }

@@ -1,15 +1,16 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
 import '../cubit/visits_cubit.dart';
 
 class AddVisitDialog extends StatefulWidget {
   final int doctorId;
   final String patientName;
+  final VisitsCubit visitsCubit; // ← أضف هاد
 
   const AddVisitDialog({
     super.key,
     required this.doctorId,
     required this.patientName,
+    required this.visitsCubit, // ← أضف هاد
   });
 
   @override
@@ -79,7 +80,6 @@ class _AddVisitDialogState extends State<AddVisitDialog> {
                 ),
                 const Divider(height: 24),
 
-                // الشكوى
                 _buildField(
                   controller: _complaintCtrl,
                   label: 'الشكوى (يشكو من...) *',
@@ -90,7 +90,6 @@ class _AddVisitDialogState extends State<AddVisitDialog> {
                 ),
                 const SizedBox(height: 14),
 
-                // التشخيص
                 _buildField(
                   controller: _diagnosisCtrl,
                   label: 'التشخيص *',
@@ -101,7 +100,6 @@ class _AddVisitDialogState extends State<AddVisitDialog> {
                 ),
                 const SizedBox(height: 14),
 
-                // العلاج
                 _buildField(
                   controller: _treatmentCtrl,
                   label: 'العلاج / الوصفة *',
@@ -112,7 +110,6 @@ class _AddVisitDialogState extends State<AddVisitDialog> {
                 ),
                 const SizedBox(height: 14),
 
-                // ملاحظات
                 _buildField(
                   controller: _notesCtrl,
                   label: 'ملاحظات وتعليمات',
@@ -121,7 +118,6 @@ class _AddVisitDialogState extends State<AddVisitDialog> {
                 ),
                 const SizedBox(height: 24),
 
-                // الأزرار
                 Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
@@ -194,7 +190,8 @@ class _AddVisitDialogState extends State<AddVisitDialog> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isSaving = true);
 
-    final error = await context.read<VisitsCubit>().addVisit(
+    // استخدم الـ Cubit مباشرة من الـ widget بدل context.read
+    final error = await widget.visitsCubit.addVisit(
       doctorId: widget.doctorId,
       complaint: _complaintCtrl.text.trim(),
       diagnosis: _diagnosisCtrl.text.trim(),

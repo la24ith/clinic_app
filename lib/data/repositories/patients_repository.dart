@@ -52,4 +52,12 @@ class PatientsRepository {
   Future<int> archivePatient(int id) {
     return db.archivePatient(id);
   }
+
+  Stream<List<Patient>> watchArchivedPatients() {
+    return db.watchArchivedPatients();
+  }
+
+  Future<int> restorePatient(int id) {
+    return db.restorePatient(id);
+  }
 }
