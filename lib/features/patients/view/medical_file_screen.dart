@@ -1,7 +1,12 @@
 import 'package:clinic_app/core/services/prescription_service.dart';
+import 'package:clinic_app/core/services/whatsapp_service.dart';
 import 'package:clinic_app/data/repositories/settings_repository.dart';
+import 'package:clinic_app/features/patients/widgets/medical_timeline.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:path/path.dart' as p;
+import 'package:url_launcher/url_launcher.dart';
 import '../../../core/di/injector.dart';
 import '../../../data/database/database.dart';
 import '../../../data/database/tables/patients_table.dart';
@@ -184,7 +189,7 @@ class _MedicalFileScreenState extends State<MedicalFileScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Icon(
-                    Icons.medical_information_outlined,
+                    Icons.timeline_outlined,
                     size: 64,
                     color: Colors.grey[300],
                   ),
@@ -202,19 +207,13 @@ class _MedicalFileScreenState extends State<MedicalFileScreen> {
               ),
             );
           }
-          return ListView.separated(
-            itemCount: state.visits.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 12),
-            itemBuilder: (context, i) => _VisitCard(
-              visit: state.visits[i],
-              patient: _patient!, // ← أضف
-              setting:
-                  _setting ??
-                  const ClinicSetting(
-                    // ← أضف
-                    id: 1,
-                    autoBackupEnabled: false,
-                  ),
+
+          // ← هنا التايم لاين بدل القائمة العادية
+          return SingleChildScrollView(
+            child: MedicalTimeline(
+              visits: state.visits,
+              patient: _patient!,
+              setting: _setting,
             ),
           );
         }
@@ -276,179 +275,6 @@ class _InfoChip extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-class _VisitCard extends StatelessWidget {
-  final Visit visit;
-  final Patient patient; // ← أضف هاد
-  final ClinicSetting setting; // ← وهاد
-
-  const _VisitCard({
-    required this.visit,
-    required this.patient,
-    required this.setting,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Theme(
-        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-        child: ExpansionTile(
-          tilePadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-          childrenPadding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
-          leading: Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: const Color(0xFF1F3864).withOpacity(0.08),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: const Icon(
-              Icons.medical_services_outlined,
-              color: Color(0xFF1F3864),
-              size: 20,
-            ),
-          ),
-          title: Text(
-            visit.diagnosis,
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          subtitle: Text(
-            _formatDate(visit.visitDate),
-            style: TextStyle(fontSize: 12, color: Colors.grey[500]),
-          ),
-          // ── زر الطباعة ──
-          trailing: IconButton(
-            icon: const Icon(Icons.print_outlined, color: Color(0xFF1F3864)),
-            tooltip: 'طباعة الوصفة',
-            onPressed: () => _print(context),
-          ),
-          children: [
-            const Divider(height: 1),
-            const SizedBox(height: 12),
-            _Section(
-              title: 'الشكوى',
-              content: visit.complaint,
-              color: const Color(0xFF6366F1),
-            ),
-            const SizedBox(height: 10),
-            _Section(
-              title: 'التشخيص',
-              content: visit.diagnosis,
-              color: const Color(0xFF1F3864),
-            ),
-            const SizedBox(height: 10),
-            _Section(
-              title: 'العلاج / الوصفة',
-              content: visit.treatment,
-              color: const Color(0xFF10B981),
-            ),
-            if (visit.notes != null && visit.notes!.isNotEmpty) ...[
-              const SizedBox(height: 10),
-              _Section(
-                title: 'ملاحظات',
-                content: visit.notes!,
-                color: const Color(0xFFF59E0B),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  Future<void> _print(BuildContext context) async {
-    try {
-      await PrescriptionService.printPrescription(
-        visit: visit,
-        patient: patient,
-        setting: setting,
-      );
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('فشل الطباعة: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
-  String _formatDate(DateTime date) {
-    final months = [
-      'يناير',
-      'فبراير',
-      'مارس',
-      'أبريل',
-      'مايو',
-      'يونيو',
-      'يوليو',
-      'أغسطس',
-      'سبتمبر',
-      'أكتوبر',
-      'نوفمبر',
-      'ديسمبر',
-    ];
-    return '${date.day} ${months[date.month - 1]} ${date.year}';
-  }
-}
-
-class _Section extends StatelessWidget {
-  final String title;
-  final String content;
-  final Color color;
-
-  const _Section({
-    required this.title,
-    required this.content,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          style: TextStyle(
-            fontSize: 12,
-            color: color,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: color.withOpacity(0.05),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: color.withOpacity(0.15)),
-          ),
-          child: Text(
-            content,
-            style: const TextStyle(fontSize: 14, height: 1.5),
-          ),
-        ),
-      ],
     );
   }
 }

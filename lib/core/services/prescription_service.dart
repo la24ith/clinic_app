@@ -163,6 +163,14 @@ class PrescriptionService {
     return pdf;
   }
 
+  static Future<pw.Document> buildPdfDocument({
+    required Visit visit,
+    required Patient patient,
+    required ClinicSetting setting,
+  }) async {
+    return _buildPdf(visit: visit, patient: patient, setting: setting);
+  }
+
   // ── الرأس ──
   static pw.Widget _buildHeader({
     required ClinicSetting setting,
