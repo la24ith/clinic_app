@@ -1,22 +1,19 @@
-import 'package:clinic_app/core/services/prescription_service.dart';
-import 'package:clinic_app/core/services/whatsapp_service.dart';
-import 'package:clinic_app/data/repositories/settings_repository.dart';
-import 'package:clinic_app/features/patients/widgets/medical_timeline.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:path/path.dart' as p;
-import 'package:url_launcher/url_launcher.dart';
+import 'package:go_router/go_router.dart';
 import '../../../core/di/injector.dart';
+import '../../../core/router/app_router.dart';
 import '../../../data/database/database.dart';
 import '../../../data/database/tables/patients_table.dart';
 import '../../../data/repositories/patients_repository.dart';
 import '../../../data/repositories/visits_repository.dart';
+import '../../../data/repositories/settings_repository.dart';
 import '../../visits/cubit/visits_cubit.dart';
 import '../../visits/cubit/visits_state.dart';
 import '../../visits/widgets/add_visit_dialog.dart';
 import '../../auth/cubit/auth_cubit.dart';
 import '../../auth/cubit/auth_state.dart';
+import '../widgets/medical_timeline.dart'; // ← التايم لاين الجديد
 
 class MedicalFileScreen extends StatefulWidget {
   final int patientId;
@@ -28,13 +25,21 @@ class MedicalFileScreen extends StatefulWidget {
 
 class _MedicalFileScreenState extends State<MedicalFileScreen> {
   Patient? _patient;
-  ClinicSetting? _setting; // ← أضف هاد
+  ClinicSetting? _setting;
   bool _loading = true;
+  late final VisitsCubit _visitsCubit;
 
   @override
   void initState() {
     super.initState();
+    _visitsCubit = VisitsCubit(getIt<VisitsRepository>(), widget.patientId);
     _loadData();
+  }
+
+  @override
+  void dispose() {
+    _visitsCubit.close();
+    super.dispose();
   }
 
   Future<void> _loadData() async {
@@ -42,7 +47,6 @@ class _MedicalFileScreenState extends State<MedicalFileScreen> {
       final p = await getIt<PatientsRepository>().getPatientById(
         widget.patientId,
       );
-      // جلب الإعدادات أيضاً
       final s = await getIt<SettingsRepository>().watchSettings().first;
       if (mounted) {
         setState(() {
@@ -65,20 +69,22 @@ class _MedicalFileScreenState extends State<MedicalFileScreen> {
       return const Scaffold(body: Center(child: Text('المريض غير موجود')));
     }
 
-    return BlocProvider(
-      create: (_) => VisitsCubit(getIt<VisitsRepository>(), widget.patientId),
-      child: Scaffold(
-        backgroundColor: const Color(0xFFF5F7FA),
-        body: Padding(
-          padding: const EdgeInsets.all(28),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildHeader(context),
-              const SizedBox(height: 24),
-              Expanded(child: _buildVisitsList(context)),
-            ],
-          ),
+    return Scaffold(
+      backgroundColor: const Color(0xFFF5F7FA),
+      body: Padding(
+        padding: const EdgeInsets.all(28),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildHeader(context),
+            const SizedBox(height: 24),
+            Expanded(
+              child: BlocProvider.value(
+                value: _visitsCubit,
+                child: _buildBody(),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -107,6 +113,31 @@ class _MedicalFileScreenState extends State<MedicalFileScreen> {
       ),
       child: Row(
         children: [
+          // زر العودة
+          Container(
+            margin: const EdgeInsetsDirectional.only(end: 16),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1F3864).withOpacity(0.08),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: IconButton(
+              icon: const Icon(
+                Icons.arrow_forward_ios_rounded,
+                color: Color(0xFF1F3864),
+                size: 20,
+              ),
+              tooltip: 'عودة للمرضى',
+              onPressed: () {
+                if (context.canPop()) {
+                  context.pop();
+                } else {
+                  context.go(AppRoutes.patients);
+                }
+              },
+            ),
+          ),
+
+          // الأفاتار
           CircleAvatar(
             radius: 32,
             backgroundColor: const Color(0xFF1F3864).withOpacity(0.1),
@@ -120,6 +151,8 @@ class _MedicalFileScreenState extends State<MedicalFileScreen> {
             ),
           ),
           const SizedBox(width: 16),
+
+          // البيانات
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -159,6 +192,8 @@ class _MedicalFileScreenState extends State<MedicalFileScreen> {
               ],
             ),
           ),
+
+          // زر إضافة زيارة
           FilledButton.icon(
             onPressed: () => _showAddVisit(context),
             icon: const Icon(Icons.add),
@@ -173,7 +208,8 @@ class _MedicalFileScreenState extends State<MedicalFileScreen> {
     );
   }
 
-  Widget _buildVisitsList(BuildContext context) {
+  // ── هنا الفرق الجوهري: BlocBuilder يمرر الزيارات للتايم لاين ──
+  Widget _buildBody() {
     return BlocBuilder<VisitsCubit, VisitsState>(
       builder: (context, state) {
         if (state is VisitsLoading) {
@@ -184,32 +220,12 @@ class _MedicalFileScreenState extends State<MedicalFileScreen> {
         }
         if (state is VisitsLoaded) {
           if (state.visits.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.timeline_outlined,
-                    size: 64,
-                    color: Colors.grey[300],
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'لا توجد زيارات سابقة',
-                    style: TextStyle(fontSize: 18, color: Colors.grey[500]),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'اضغط "إضافة زيارة" لتسجيل أول زيارة',
-                    style: TextStyle(color: Colors.grey[400]),
-                  ),
-                ],
-              ),
-            );
+            return _buildEmpty();
           }
 
-          // ← هنا التايم لاين بدل القائمة العادية
+          // ← التايم لاين الجديد هنا
           return SingleChildScrollView(
+            padding: const EdgeInsets.only(bottom: 20),
             child: MedicalTimeline(
               visits: state.visits,
               patient: _patient!,
@@ -222,12 +238,39 @@ class _MedicalFileScreenState extends State<MedicalFileScreen> {
     );
   }
 
+  Widget _buildEmpty() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.timeline_outlined, size: 64, color: Colors.grey[300]),
+          const SizedBox(height: 16),
+          Text(
+            'لا توجد زيارات سابقة',
+            style: TextStyle(fontSize: 18, color: Colors.grey[500]),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'اضغط "إضافة زيارة" لتسجيل أول زيارة',
+            style: TextStyle(color: Colors.grey[400]),
+          ),
+          const SizedBox(height: 20),
+          FilledButton.icon(
+            onPressed: () => _showAddVisit(context),
+            icon: const Icon(Icons.add),
+            label: const Text('إضافة أول زيارة'),
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFF1F3864),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showAddVisit(BuildContext context) {
     final authState = getIt<AuthCubit>().state;
     if (authState is! AuthSuccess) return;
-
-    // احصل على الـ Cubit قبل ما تفتح الـ Dialog
-    final visitsCubit = context.read<VisitsCubit>();
 
     showDialog(
       context: context,
@@ -235,12 +278,13 @@ class _MedicalFileScreenState extends State<MedicalFileScreen> {
       builder: (_) => AddVisitDialog(
         doctorId: authState.user.id,
         patientName: _patient!.fullName,
-        visitsCubit: visitsCubit, // ← مرره مباشرة
+        visitsCubit: _visitsCubit,
       ),
     );
   }
 }
 
+// ── Info Chip ──
 class _InfoChip extends StatelessWidget {
   final IconData icon;
   final String label;

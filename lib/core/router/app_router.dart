@@ -1,5 +1,5 @@
 import 'package:clinic_app/features/archive/view/archive_screen.dart';
-import 'package:clinic_app/features/visits/view/medical_file_screen.dart';
+import 'package:clinic_app/features/patients/view/medical_file_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -74,10 +74,6 @@ final appRouter = GoRouter(
         return MedicalFileScreen(patientId: id);
       },
     ),
-    GoRoute(
-      path: AppRoutes.archive,
-      builder: (context, state) => const ArchiveScreen(),
-    ),
 
     // Shell Route - القائمة الجانبية تحتضن كل الشاشات الداخلية
     ShellRoute(
@@ -101,6 +97,10 @@ final appRouter = GoRouter(
         GoRoute(
           path: AppRoutes.waitingList,
           builder: (context, state) => const WaitingListScreen(),
+        ),
+        GoRoute(
+          path: AppRoutes.archive,
+          builder: (context, state) => const ArchiveScreen(),
         ),
         GoRoute(
           path: AppRoutes.settings,
