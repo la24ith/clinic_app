@@ -1,5 +1,5 @@
 import 'dart:io';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import 'package:url_launcher/url_launcher.dart';
@@ -8,28 +8,24 @@ import '../../data/database/database.dart';
 import 'prescription_service.dart';
 
 class WhatsAppService {
-  /// المدخل الرئيسي — يختار التنفيذ حسب المنصة
   static Future<WhatsAppResult> sharePresciption({
     required Visit visit,
     required Patient patient,
     required ClinicSetting setting,
   }) async {
     try {
-      // 1. توليد الـ PDF
       final pdfBytes = await _generatePdfBytes(
         visit: visit,
         patient: patient,
         setting: setting,
       );
 
-      // 2. حفظ الـ PDF مؤقتاً
       final file = await _saveTempPdf(
         bytes: pdfBytes,
         patientName: patient.fullName,
         visitDate: visit.visitDate,
       );
 
-      // 3. تنفيذ المشاركة حسب المنصة
       if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
         return await _shareOnDesktop(
           file: file,
@@ -37,7 +33,6 @@ class WhatsAppService {
           setting: setting,
         );
       } else {
-        // موبايل (Android/iOS) — لاحقاً
         return await _shareOnMobile(
           file: file,
           patient: patient,
@@ -49,23 +44,28 @@ class WhatsAppService {
     }
   }
 
-  // ── Desktop: حفظ + فتح واتساب ويب ──
   static Future<WhatsAppResult> _shareOnDesktop({
     required File file,
     required Patient patient,
     required ClinicSetting setting,
   }) async {
-    // تنظيف رقم الهاتف (إزالة الفراغات والرموز)
     final phone = _cleanPhone(patient.phone);
-
-    // رسالة واتساب جاهزة
     final doctorName = setting.doctorName ?? 'الطبيب';
+
     final message =
         'السلام عليكم ${patient.fullName}،\n'
         'تجدون مرفقاً الوصفة الطبية من $doctorName.\n'
-        'تاريخ الزيارة: ${_formatDate(file.path)}';
+        'تاريخ الزيارة: ${_formatDate(DateTime.now())}';
 
-    // فتح واتساب ويب
+    // نسخ مسار الملف للـ Clipboard تلقائياً
+    await Clipboard.setData(ClipboardData(text: file.path));
+
+    // فتح مجلد الملف في Explorer
+    await _openFolder(file.path);
+
+    // فتح واتساب ويب بعد ثانية (حتى يفتح المجلد أولاً)
+    await Future.delayed(const Duration(milliseconds: 800));
+
     final whatsappUrl = Uri.parse(
       'https://wa.me/$phone?text=${Uri.encodeComponent(message)}',
     );
@@ -76,18 +76,29 @@ class WhatsAppService {
     );
 
     if (!launched) {
-      return WhatsAppResult.failure(
-        'تعذر فتح واتساب. تأكد من تثبيت واتساب أو استخدام واتساب ويب.',
-      );
+      return WhatsAppResult.failure('تعذر فتح واتساب.');
     }
 
     return WhatsAppResult.desktopSuccess(
       pdfPath: file.path,
-      message: 'تم فتح واتساب\nيرجى إرفاق الوصفة يدوياً من:\n${file.path}',
+      message:
+          'تم نسخ مسار الوصفة تلقائياً\nافتح واتساب واضغط المرفق ثم الصق المسار',
     );
   }
 
-  // ── Mobile: مشاركة مباشرة مع PDF ──
+  static Future<void> _openFolder(String filePath) async {
+    final folder = p.dirname(filePath);
+    try {
+      // Windows Explorer يفتح المجلد ويحدد الملف
+      await Process.run('explorer', ['/select,', filePath]);
+    } catch (_) {
+      try {
+        final uri = Uri.parse('file:///$folder');
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } catch (_) {}
+    }
+  }
+
   static Future<WhatsAppResult> _shareOnMobile({
     required File file,
     required Patient patient,
@@ -113,7 +124,6 @@ class WhatsAppService {
     return WhatsAppResult.failure('لم تكتمل المشاركة');
   }
 
-  // ── توليد بايتات الـ PDF ──
   static Future<List<int>> _generatePdfBytes({
     required Visit visit,
     required Patient patient,
@@ -127,14 +137,13 @@ class WhatsAppService {
     return pdf.save();
   }
 
-  // ── حفظ PDF مؤقتاً ──
   static Future<File> _saveTempPdf({
     required List<int> bytes,
     required String patientName,
     required DateTime visitDate,
   }) async {
     final tempDir = await getTemporaryDirectory();
-    final safeName = patientName.replaceAll(' ', '_');
+    final safeName = patientName.replaceAll(RegExp(r'[^\w\u0600-\u06FF]'), '_');
     final dateStr = '${visitDate.day}-${visitDate.month}-${visitDate.year}';
     final fileName = 'وصفة_${safeName}_$dateStr.pdf';
     final file = File(p.join(tempDir.path, fileName));
@@ -142,11 +151,8 @@ class WhatsAppService {
     return file;
   }
 
-  // ── تنظيف رقم الهاتف ──
   static String _cleanPhone(String phone) {
-    // إزالة كل شيء إلا الأرقام و +
     var cleaned = phone.replaceAll(RegExp(r'[^\d+]'), '');
-    // إضافة كود سوريا إذا لم يكن موجوداً
     if (cleaned.startsWith('0')) {
       cleaned = '+963${cleaned.substring(1)}';
     } else if (!cleaned.startsWith('+')) {
@@ -155,13 +161,11 @@ class WhatsAppService {
     return cleaned;
   }
 
-  static String _formatDate(String path) {
-    final now = DateTime.now();
-    return '${now.day}/${now.month}/${now.year}';
+  static String _formatDate(DateTime dt) {
+    return '${dt.day}/${dt.month}/${dt.year}';
   }
 }
 
-// ── نتيجة المشاركة ──
 class WhatsAppResult {
   final bool isSuccess;
   final bool isCancelled;

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../../data/database/database.dart';
 import '../../../core/services/prescription_service.dart';
 import '../../../core/services/whatsapp_service.dart';
@@ -474,6 +475,29 @@ class _MedicalTimelineState extends State<MedicalTimeline> {
   }
 
   Future<void> _share(Visit visit) async {
+    // إظهار Loading
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Row(
+            children: [
+              SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
+              ),
+              SizedBox(width: 12),
+              Text('جاري تجهيز الوصفة...'),
+            ],
+          ),
+          duration: Duration(seconds: 15),
+        ),
+      );
+    }
+
     final result = await WhatsAppService.sharePresciption(
       visit: visit,
       patient: widget.patient,
@@ -481,12 +505,150 @@ class _MedicalTimelineState extends State<MedicalTimeline> {
           widget.setting ??
           const ClinicSetting(id: 1, autoBackupEnabled: false),
     );
+
     if (!mounted) return;
-    if (result.error != null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(result.error!)));
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+
+    if (result.isSuccess && result.isDesktop) {
+      // Dialog يشرح الخطوات
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF25D366).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.share_outlined,
+                  color: Color(0xFF25D366),
+                ),
+              ),
+              const SizedBox(width: 10),
+              const Text('إرسال الوصفة عبر واتساب'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // الخطوات
+              _buildStep(1, 'تم فتح مجلد الوصفة تلقائياً', done: true),
+              const SizedBox(height: 10),
+              _buildStep(2, 'تم فتح واتساب مع الرسالة', done: true),
+              const SizedBox(height: 10),
+              _buildStep(3, 'اضغط أيقونة المرفق في واتساب', done: false),
+              const SizedBox(height: 10),
+              _buildStep(4, 'اختر الملف من المجلد المفتوح', done: false),
+              const SizedBox(height: 16),
+
+              // مسار الملف
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.grey.shade200),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.folder_outlined,
+                      size: 16,
+                      color: Color(0xFF1F3864),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        result.pdfPath ?? '',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontFamily: 'monospace',
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    // زر نسخ المسار
+                    IconButton(
+                      icon: const Icon(Icons.copy_outlined, size: 14),
+                      tooltip: 'نسخ المسار',
+                      onPressed: () async {
+                        await Clipboard.setData(
+                          ClipboardData(text: result.pdfPath ?? ''),
+                        );
+                        if (ctx.mounted) {
+                          ScaffoldMessenger.of(ctx).showSnackBar(
+                            const SnackBar(
+                              content: Text('تم نسخ المسار ✓'),
+                              duration: Duration(seconds: 2),
+                            ),
+                          );
+                        }
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('تم'),
+            ),
+          ],
+        ),
+      );
+    } else if (result.error != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(result.error!), backgroundColor: Colors.red),
+      );
     }
+  }
+
+  Widget _buildStep(int num, String text, {required bool done}) {
+    return Row(
+      children: [
+        Container(
+          width: 24,
+          height: 24,
+          decoration: BoxDecoration(
+            color: done
+                ? const Color(0xFF25D366)
+                : const Color(0xFF1F3864).withOpacity(0.1),
+            shape: BoxShape.circle,
+          ),
+          child: Center(
+            child: done
+                ? const Icon(Icons.check, size: 14, color: Colors.white)
+                : Text(
+                    num.toString(),
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF1F3864),
+                    ),
+                  ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            text,
+            style: TextStyle(
+              fontSize: 13,
+              color: done ? Colors.green[700] : Colors.black87,
+            ),
+          ),
+        ),
+      ],
+    );
   }
 
   String _formatDate(DateTime d) {
